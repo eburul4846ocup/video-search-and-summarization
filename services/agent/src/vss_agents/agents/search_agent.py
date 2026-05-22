@@ -101,8 +101,11 @@ class SearchAgentInput(BaseModel):
     use_attribute_search: bool | None = Field(
         default=None, description="Enable fusion reranking with attribute search (overrides config if provided)"
     )
-    max_results: int = Field(default=5, description="Maximum number of results to return")
-    top_k: int | None = Field(default=None, description="Override top_k for embed search")
+    max_results: int = Field(
+        default=5,
+        description="Final number of results to return when the user explicitly asks for a result count.",
+    )
+    top_k: int | None = Field(default=None, description="Override internal candidate count for search/reranking")
     start_time: str | None = Field(default=None, description="Start time filter (ISO format)")
     end_time: str | None = Field(default=None, description="End time filter (ISO format)")
     source_type: Literal["video_file", "rtsp"] = Field(
@@ -126,6 +129,24 @@ def _effective_search_runtime_options(
         search_agent_input.request_options.search_source_type,
         search_agent_input.request_options.use_critic,
     )
+
+
+def _explicit_max_results(search_agent_input: SearchAgentInput) -> int | None:
+    """Return max_results only when the caller explicitly provided it."""
+    if "max_results" not in search_agent_input.model_fields_set:
+        return None
+    return max(0, search_agent_input.max_results)
+
+
+def _apply_final_result_limit(
+    results: list[SearchResult],
+    search_agent_input: SearchAgentInput,
+) -> list[SearchResult]:
+    """Apply the user-facing result limit without changing retrieval top_k."""
+    max_results = _explicit_max_results(search_agent_input)
+    if max_results is None:
+        return results
+    return results[:max_results]
 
 
 class SearchAgentConfig(FunctionBaseConfig, name="search_agent"):
@@ -439,9 +460,11 @@ async def search_agent(config: SearchAgentConfig, builder: Builder) -> AsyncGene
             if isinstance(update, SearchOutput):
                 search_output = update
 
-        return SearchOutput(
-            data=await stream_name_resolver.resolve(search_output.data), search_messages=search_output.search_messages
+        final_results = _apply_final_result_limit(
+            await stream_name_resolver.resolve(search_output.data),
+            search_agent_input,
         )
+        return SearchOutput(data=final_results, search_messages=search_output.search_messages)
 
     async def _execute_search_stream(
         search_agent_input: SearchAgentInput,
@@ -461,7 +484,7 @@ async def search_agent(config: SearchAgentConfig, builder: Builder) -> AsyncGene
             if search_agent_input.use_attribute_search is not None
             else config.use_attribute_search
         )
-        max_results = search_agent_input.max_results
+        max_results = _explicit_max_results(search_agent_input)
         top_k = search_agent_input.top_k
         start_time = search_agent_input.start_time
         end_time = search_agent_input.end_time
@@ -518,7 +541,10 @@ async def search_agent(config: SearchAgentConfig, builder: Builder) -> AsyncGene
                 elif isinstance(update, SearchOutput):
                     search_output = update
 
-            final_results = await stream_name_resolver.resolve(search_output.data)
+            final_results = _apply_final_result_limit(
+                await stream_name_resolver.resolve(search_output.data),
+                search_agent_input,
+            )
             result_count = len(final_results)
 
             # Build SearchOutput-compatible JSON

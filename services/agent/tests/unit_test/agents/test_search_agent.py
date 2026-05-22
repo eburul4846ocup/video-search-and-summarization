@@ -25,7 +25,9 @@ import pytest
 from vss_agents.agents.data_models import AgentRequestOptions
 from vss_agents.agents.search_agent import SearchAgentConfig
 from vss_agents.agents.search_agent import SearchAgentInput
+from vss_agents.agents.search_agent import _apply_final_result_limit
 from vss_agents.agents.search_agent import _effective_search_runtime_options
+from vss_agents.agents.search_agent import _explicit_max_results
 from vss_agents.agents.search_agent import _helper_markdown_bullet_list
 from vss_agents.agents.search_agent import _to_chat_response
 from vss_agents.agents.search_agent import _to_chat_response_chunk
@@ -161,6 +163,41 @@ class TestSearchAgentInput:
         )
         assert input_data.top_k == 50
         assert input_data.max_results == 5
+
+    def test_explicit_max_results_detected(self):
+        """Test explicit max_results is distinguishable from the schema default."""
+        input_data = SearchAgentInput(query="test query", max_results=5)
+
+        assert _explicit_max_results(input_data) == 5
+
+    def test_default_max_results_not_treated_as_explicit_limit(self):
+        """Test omitted max_results preserves existing default result behavior."""
+        input_data = SearchAgentInput(query="test query")
+
+        assert input_data.max_results == 5
+        assert _explicit_max_results(input_data) is None
+
+    def test_apply_final_result_limit_caps_when_explicit(self):
+        """Test explicit max_results caps the final returned results."""
+        input_data = SearchAgentInput(query="test query", max_results=2)
+        results = _make_search_output(5).data
+
+        assert len(_apply_final_result_limit(results, input_data)) == 2
+
+    def test_apply_final_result_limit_does_not_cap_when_omitted(self):
+        """Test omitted max_results leaves backend top_k/default behavior untouched."""
+        input_data = SearchAgentInput(query="test query")
+        results = _make_search_output(5).data
+
+        assert len(_apply_final_result_limit(results, input_data)) == 5
+
+    def test_apply_final_result_limit_keeps_top_k_as_candidate_count(self):
+        """Test top_k can be larger than the final max_results cap."""
+        input_data = SearchAgentInput(query="test query", top_k=20, max_results=3)
+        results = _make_search_output(10).data
+
+        assert input_data.top_k == 20
+        assert len(_apply_final_result_limit(results, input_data)) == 3
 
     def test_time_filters(self):
         """Test with time filters."""
