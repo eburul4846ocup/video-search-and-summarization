@@ -12,7 +12,31 @@ import subprocess
 import sys
 
 
-DEFAULT_CONTAINER = "openshell-cluster-nemoclaw"
+# Gateway container naming changed in NemoClaw >= v0.0.40 from the legacy
+# kubectl-driver "openshell-cluster-*" form to the Docker-driver
+# "nemoclaw-openshell-*" form. Detect whichever is running; fall back to the
+# new name when nothing is up yet (we get a clearer error downstream than
+# silently sticking with the legacy default).
+GATEWAY_NAME_PREFIXES = ("nemoclaw-openshell-", "openshell-cluster-")
+
+
+def detect_default_gateway_container() -> str:
+    try:
+        result = subprocess.run(
+            ["docker", "ps", "--format", "{{.Names}}"],
+            check=True,
+            text=True,
+            capture_output=True,
+        )
+    except (OSError, subprocess.CalledProcessError):
+        return "nemoclaw-openshell-gateway"
+    for name in result.stdout.splitlines():
+        if name.startswith(GATEWAY_NAME_PREFIXES):
+            return name
+    return "nemoclaw-openshell-gateway"
+
+
+DEFAULT_CONTAINER = detect_default_gateway_container()
 DEFAULT_NAMESPACE = "openshell"
 DEFAULT_CONFIG_PATH = "/sandbox/.openclaw/openclaw.json"
 DEFAULT_WORKSPACE_DIR = "/sandbox/.openclaw/workspace"
