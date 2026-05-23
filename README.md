@@ -2,6 +2,8 @@
 
 A fork of [NVIDIA AI Blueprints: Video Search and Summarization](https://github.com/NVIDIA-AI-Blueprints/video-search-and-summarization) that enables intelligent video search and AI-powered summarization using NVIDIA's multimodal models.
 
+> **Personal fork notes:** I'm using this for learning multimodal RAG pipelines. Tested primarily on RTX 3090 with CUDA 12.2. The quick start below reflects my local setup.
+
 ## Overview
 
 This blueprint demonstrates how to build a video search and summarization application leveraging:
@@ -96,13 +98,4 @@ uvicorn src.main:app --reload
 
 Please read [CONTRIBUTING.md](CONTRIBUTING.md) and review our [pull request template](.github/PULL_REQUEST_TEMPLATE.md) before submitting changes.
 
-To report bugs or request features, use the appropriate [issue template](.github/ISSUE_TEMPLATE/).
-
-## License
-
-This project is licensed under the Apache 2.0 License — see the [LICENSE](LICENSE) file for details.
-
-## Acknowledgments
-
-- Original blueprint by [NVIDIA AI Blueprints](https://github.com/NVIDIA-AI-Blueprints)
-- Built on [NVIDIA NIM](https://developer.nvidia.com/nim) microservices
+To report bugs or request features, use the appropriate [issue templ
